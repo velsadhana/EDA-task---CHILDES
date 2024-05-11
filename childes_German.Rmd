@@ -1,0 +1,670 @@
+---
+title: "Analyzing the German articles' usage by children"
+author: "Sadhana"
+date: "2024-05-01"
+output: html_document
+---
+
+# Creating main dataframe for the task
+## 1. Loading the necessary libraries. 
+
+'childesr' library package is used to access the childes-db database (Sanchez et.al., 2019). Childes-db is an interface to CHILDES corpus (MacWhinney & Snow, 1985; MacWhinney, 2000, 2014).
+
+
+```{r message=FALSE warning=FALSE}
+
+library(childesr)
+library(tidyverse)
+library(ggplot2)
+library(ggrepel)
+
+```
+
+## 2. Listing the functions in 'childesr' package
+
+Since childes-db contains a set of tables, the 'childesr' package helps to retrieve and manipulate those tables with the help of below functions. For instance, get_collections() gives the names of available collections of corpora (“German”, “Spanish”, etc), and get_corpora() gives the names of available corpora.
+
+
+```{r}
+
+ls("package:childesr")
+
+```
+
+
+```{r}
+
+collection <- get_collections()
+head(collection)
+
+```
+
+
+```{r}
+
+corpora <- get_corpora()
+head(corpora)
+
+```
+
+## 3. Retrieving only the German data with the help of get_tokens() function
+
+get_tokens() gives information about the words we need
+
+```{r}
+
+childes.Ger.article <- get_tokens(collection = "German", token = c("der","die","das","den","dem","ein","eine","einen","einem","einer"))
+
+```
+```{r}
+
+head(childes.Ger.article)
+
+```
+
+
+## 4. Creating the main dataframe 
+#### 4.1. Selecting only the required columns
+
+```{r}
+
+childes.Ger.article.df <- select(childes.Ger.article, c(gloss,speaker_role,target_child_name,target_child_age,corpus_name))
+head(childes.Ger.article.df)
+
+```
+
+#### 4.2. Checking for NA values and removing those rows
+
+```{r}
+
+colSums(is.na(childes.Ger.article.df))
+
+```
+
+```{r}
+
+childes.Ger.article.df <- na.omit(childes.Ger.article.df)
+
+```
+
+
+#### 4.3. Checking the list of German corpora 
+
+```{r}
+
+childes.Ger.article.df %>% count(corpus_name)
+
+```
+
+#### 4.4. Getting the range of ages of children (ages are represented in terms of months)
+
+```{r}
+
+min(childes.Ger.article.df$target_child_age)
+max(childes.Ger.article.df$target_child_age)
+
+```
+
+#### 4.5. Selecting ages between 12 and 96 months (i.e., from 1 to 8 years)
+
+```{r}
+
+childes.Ger.article.df <- filter(childes.Ger.article.df, target_child_age >= 12 & target_child_age <= 96)
+head(childes.Ger.article.df)
+
+```
+
+#### 4.6. Renaming the column name of 'gloss' to 'article'
+
+```{r}
+
+childes.Ger.article.df <- rename(childes.Ger.article.df, article=gloss)
+
+
+```
+
+```{r}
+
+childes.Ger.article.df <- filter(childes.Ger.article.df, article %in% c("der","die","das","den","dem","ein","eine","einen","einem","einer"))
+
+```
+
+#### 4.7. Adding a new column called 'target_child_age_inyears' for representing ages in years
+
+
+```{r}
+
+childes.Ger.article.df <- mutate(childes.Ger.article.df, target_child_age = as.integer(target_child_age))
+
+```
+
+
+```{r}
+
+childes.Ger.article.df <- mutate(childes.Ger.article.df, target_child_age_inyears = target_child_age / 12)
+
+```
+
+```{r}
+
+childes.Ger.article.df <- mutate(childes.Ger.article.df, target_child_age_inyears = round(target_child_age_inyears, 1))
+head(childes.Ger.article.df)
+
+```
+
+#### 4.8. Classifying ages in terms of stage (stage1, stage2, etc.) and adding it in a new column.
+
+1 to 2 years belongs to stage1, 2 to 3 years belongs to stage2, 3 to 4 years belongs to stage3, 4 to 6 years belongs to stage4, and 6 to 8 years belongs to stage5
+
+```{r}
+
+childes.Ger.article.df %>% count(target_child_age_inyears)
+
+```
+
+
+```{r}
+
+childes.Ger.article.df <-  mutate(childes.Ger.article.df, stage = case_when(target_child_age_inyears >=1.0 &  target_child_age_inyears <=2.0 ~ "stage1", target_child_age_inyears >=2.1 &  target_child_age_inyears <=3.0 ~ "stage2", target_child_age_inyears >=3.1 &  target_child_age_inyears <=4.0 ~ "stage3", target_child_age_inyears >=4.1 &  target_child_age_inyears <=6.0 ~ "stage4", target_child_age_inyears >=6.1 &  target_child_age_inyears <=8.0 ~ "stage5"))
+            
+
+```
+
+```{r}
+
+head(childes.Ger.article.df)
+
+
+```
+```{r}
+
+summary(childes.Ger.article.df)
+
+```
+
+'childes.Ger.article.df' is the main dataframe. It consists of 6,12,683 rows and 7 columns. The columns are article, speaker_role, target_child_name, target_child_age, corpus_name, target_child_age_inyears, and stage.
+ 
+
+# Research question 1
+
+At what age, children start to use articles in general? From when they start to use accusative and dative?
+
+## 1. Creating a subset dataframe for research question 1
+#### 1.1. Copying the main dataframe
+
+```{r}
+
+childes.Ger.article.df1 <- childes.Ger.article.df
+
+```
+
+
+#### 1.2. Selecting only 'Target_Child' value in 'speaker_role' column, since this question is only related to children
+
+```{r}
+
+childes.Ger.article.df1 <- filter(childes.Ger.article.df1, speaker_role=="Target_Child")
+head(childes.Ger.article.df1)
+
+```
+
+
+
+#### 1.3. Selecting only the required columns 
+
+```{r}
+
+childes.Ger.article.df1 <- select(childes.Ger.article.df1, c(article,stage))
+
+head(childes.Ger.article.df1)
+
+```
+
+```{r}
+
+summary(childes.Ger.article.df1)
+
+```
+
+'childes.Ger.article.df1' is the dataframe for research question 1 and it contains 1,72,657 rows and 2 columns such as article and stage
+
+#### 1.4. Saving the dataframe as excel file
+
+```{r}
+
+library(openxlsx)
+
+```
+
+```{r}
+
+write.xlsx(childes.Ger.article.df1, 'childes_German_article_df1.xlsx',colNames=TRUE, rowNames=TRUE)
+
+```
+
+
+## 2. MCA analysis for research question 1
+
+Glynn (2014) stated that correspondence analysis is an exploratory space reduction technique for data analysis. It identifies the patterns of association and disassociation in those data. It presents its results in the form of a two-dimensional plot, which visualizes these relationships in an intuitive manner.Correspondence analysis can be divided into 2 major classes. They are binary correspondence analysis, and multiple correspondence analysis (MCA).CA is used to analyze the relationship between 2 variables, whereas MCA is used to for analyzing more than 2 variables. Binary correspondence analysis can be implemented only for contingency table i.e., table with cross tabulation showing the frequency distribution of variables. But, MCA can be implemented for raw dataset and it doesn't need to be converted to contingency table.
+
+For this work, MCA has been used, since the dataframe is not a contingency table. In R, there are several packages available for performing MCA. In this work, 'FactoMineR' package (Le et.al., 2008) was used to perform MCA.
+
+#### 2.1. Loading 'FactoMineR' package
+
+```{r message=FALSE warning=FALSE}
+
+library(FactoMineR)
+
+```
+
+
+#### 2.3. Implementing MCA 
+
+```{r}
+
+mca.1 <- MCA(childes.Ger.article.df1)
+
+mca.1
+
+```
+
+
+
+#### 2.4.  Summary of MCA
+
+```{r}
+
+summary(mca.1)
+
+```
+
+The result of the summary can be divided into 4 parts such as eigenvalues, individuals, categories and categorical variables.
+
+Eigenvalues represent the variance of data in each dimension. The variance values for first 2 dimensions are always greater than other dimensions. In this result, the first two dimensions together represent 16% of the total variance of data. In general, variance depends on the size of data. When the data size is large, there are chances for the less variance percentage in dimensions. Since our data is large, it is not possible to show the entire variance in first 2 dimensions itself. But, it is still recommended to consider, as the first 2 dimensions provide the maximum variance as much as possible.
+
+Individuals part provides details about each rows and it is not necessary for this work. Hence, it will not be discussed.
+
+In categories part, cos2 (cosine square) represents the quality of each category. In the first dimension, 'ein' has the highest cos2 value and in the second dimension, 'einer' has highest value comparing to other ones. The column 'ctr' provides the percentage of contribution of each category in every dimension. When a category has high percentage, then it contributes the most to their corresponding dimension. In the first dimension, only 'ein' is having high contribution and in the second dimension, only 'einer' is having high contribution.
+
+The last part 'categorical variables' will not be discussed. It contains only the coordinate values of the variables, which is not necessary for this task.
+
+
+#### 2.5. Visualizing the graph of MCA
+
+```{r}
+
+plot(mca.1, invisible = "ind")
+
+```
+
+The plots of the above graph are very congested and overlapped. Hence, it is very difficult to do the interpretation. In order to overcome this problem, there is a package called 'factoextra' that provides an elegant and clear visualization of MCA graph without any overlapping. 
+
+
+```{r}
+
+library(factoextra)
+
+```
+
+'fviz_mca_var()' function is used to display the MCA graph of variable categories.
+
+```{r}
+
+fviz_mca_var(mca.1)
+
+```
+
+#### 2.6. Interpretation of MCA graph
+
+In general, when categories from same variable are grouped together, they are having similar profile, whereas when they lies far apart from each other, they are having. When categories from different variable are grouped together, it means they are closely related to each other, otherwise not in a good relationship.
+
+**Stages:**
+Stage1: 1 to 2 years
+stage2: 2 to 3 years 
+stage3: 3 to 4 years 
+stage4: 4 to 6 years
+stage5: 6 to 8 years  
+
+In the above graph, stage1 is separated from stage2. Similarly stage3, stage4, and stage5 are separated from both stage1 and stage2. But stage3, stage4, and stage5 are somehow associated and there are no much deviations between them. 
+
+**Articles:**
+The articles 'ein', 'einem' are more separated in the graph. 'die' and 'der' are close to each other. 'das' and 'den' are slightly close to each other.
+
+**Relation between stages and articles:**
+
+'einer' is closely associated with stage1, 'eine' is closely associated with stage2. Likewise, 'den', 'das', and 'einen' are grouped with stage3, also 'dem' is slightly associated with stage3. 'das' lies in between stage3 and stage4 and this implies that 'das' is used in both stage3 and stage4. However, it is very close to stage4. 'der' and 'die' are closely associated with stage5. 
+
+
+## 3. Answering research question 1
+
+At what age, children start to use articles in general? 
+
+From the above interpretation, it is clear that children start using articles at the age of 1 itself. Because, stage1 (1 to 2 years) is associated with an article ('einer'). It means, 'einer' is mostly used by children at this stage (according to this MCA visualization).
+
+From when they start to use accusative and dative?
+
+Some forms are same for some of the cases. For example: 'Die' is the form for both feminine nominative and feminine accusative, 'das' is the form for both neuter nominative and neuter accusative. Similarly 'der' is the form for masculine nominative as well as for feminine dative.
+
+The same problem has been mentioned in Collings (1990) as well. "Das for neuter nominative cannot be distinguished from das neuter accusative, just as die feminine nominative cannot be distinguished from die feminine accusative because there is no
+phonological difference; der, on the other hand, for masculine nominative can easily be distinguished from its morphological counterpart in the accusative, den. Researchers like Clahsen have argued that the emergence of accusative can only be observed when limited to den, the only case marking being visible. As for neuter and feminine, one cannot say for sure if the
+child uses nominative or accusative." (Collings, 1990)
+
+The same considerations were followed in this work as well. So, the usage of accusative will be identified by observing only 'den'/'einen', and dative by 'dem'/'einem', as these forms are the good indicator for accusative and dative respectively. 
+
+Coming to the answer, children started using accusative and dative from the age of 3 years. Because, 'den' and 'einen' are closely clustered with stage3 (3 to 4 years), and 'dem' is also slightly clustered with stage3. 
+
+
+# Research question 2
+
+Which articles' usage is high during childhood: Is it definite or indefinite ?
+
+## 1. Creating a subset dataframe for research question 2
+#### 1.1. Copying the dataframe of research question 1
+
+```{r}
+
+childes.Ger.article.df2 <- childes.Ger.article.df1
+head(childes.Ger.article.df2)
+
+```
+
+#### 1.2. Creating a new column for definite and indefinite articles
+
+```{r}
+
+childes.Ger.article.df2 <-  mutate(childes.Ger.article.df2, def = case_when(article %in% c("der","die","das","den","dem") ~ "definite", article %in% c("ein","eine","einen","einem","einer") ~ "indefinite" ))
+
+```
+
+#### 1.3. Selecting only required columns 
+
+```{r}
+
+childes.Ger.article.df2 <- select(childes.Ger.article.df2, c(stage,def))
+
+head(childes.Ger.article.df2)
+
+```
+
+'childes.Ger.article.df2' is the dataframe for research question 2 and it contains 1,72,657 rows and 2 columns such as stage and def
+
+## 2. MCA analysis for research question 2
+
+#### 2.1. Implementing MCA
+
+```{r}
+
+mca.2 <- MCA(childes.Ger.article.df2)
+
+mca.2
+
+```
+
+#### 2.2. Summary of MCA
+
+```{r}
+
+summary(mca.2)
+
+```
+
+Similar to research question 1, only the eigenvalues and categories part will be explained.
+
+In this summary, the first two dimensions together represent 41% of the total variance of data. 
+
+In categories part, 'definite', 'indefinite', and 'stage2' are categories with good quality in first dimension as they have high cos2 value.  In second dimension, only 'stage4' has high cos2 value. 
+In the first dimension, 'indefinite' is having high contribution as their ctr value is high. In second dimension, only 'stage4' has the very high contribution.
+
+
+#### 2.3. Visualizing the graph of MCA
+
+
+```{r}
+
+plot(mca.2, invisible = "ind")
+
+```
+#### 2.4. Interpretation of MCA graph
+
+**Stages:**
+
+In the above graph, stage4 is far separated from all the other categories. Stage1 and stage2 are closely associated, stage5 is slightly associated with stage1.
+
+**definite / indefinite:**
+The definite and indefinite articles are separated from each other. It means, they are having different profiles.
+
+**Relation between stages and definite/indefinite articles:**
+
+'Indefinite' is closely associated with stage2. It means, children use indefinite articles most often during their early stages i.e., till 3 years. But, the definite article is not closely associated with any of the stages.
+
+
+## 3. Answering research question 2
+
+Which articles' usage is high during childhood: Is it definite or indefinite ?
+
+In general, children are abundantly using definite articles during their childhood, as the frequency of definite is very high compared to indefinite(please see below bar chart). But during their very early stages, they are highly using indefinite articles than definite ones since indefinite is closely grouped with stage2. In the sense, their usage of indefinite is very high until 3 years. 
+As per above MCA graph, definite is not at all closely associated with any of the stages. It means, the usage of definite articles are not exceptionally high at any particular stage. As definite lies approximately between stage3 and stage5, stage1, stage2, one can say that definite articles are equally distributed among these stages. Due to the far separation of stage4, it is difficult to make predictions out of it.
+During early childhood, they use indefinite articles more often until 3 years old. Afterwards, the usage shifted from indefinite to more definite articles. Therefore, children use definite articles in a high level during their entire childhood.
+
+
+```{r}
+
+ggplot(childes.Ger.article.df2, aes(x = def)) +
+  geom_bar(stat = "count", aes(fill = def)) +
+  labs(x = "definte / indefinite", y = "Frequency of definite & indefinite articles")
+
+```
+
+# Research question 3
+
+What is the overall usage of articles among children, is it more or less (by comparing it with adults' usage) ?
+
+## 1. Creating a dataframe for research question 3
+#### 1.1. Copying the main dataframe
+
+```{r}
+
+childes.Ger.article.df3 <- childes.Ger.article.df
+
+```
+
+#### 1.2. Getting the values of 'speaker_role' column
+
+```{r}
+
+unique(childes.Ger.article.df3$speaker_role)
+
+```
+#### 1.3. Removing the rows whose 'speaker_role' is not related to adults i.e., child, friend, playmate.
+
+```{r}
+
+childes.Ger.article.df3 <- filter(childes.Ger.article.df3, speaker_role != 'Child' & speaker_role != 'Friend' & speaker_role != 'Playmate')
+
+```
+
+#### 1.4. Adding new column called 'speaker'
+
+```{r}
+
+childes.Ger.article.df3 <-  mutate(childes.Ger.article.df3, speaker = case_when(speaker_role %in% c("Investigator","Mother"   ,"Grandfather", "Brother","Father","Relative","Grandmother","Visitor", "Adult", "Sister", "Teacher", "Sibling", "Unidentified", "Media" ) ~ "adults", speaker_role == "Target_Child" ~ "children"))
+
+```
+
+#### 1.5. Changing the values of 'article' column into definite and indefinite. Inorder to make the analysis clear and simple, the articles has been categorized into definite and indefinite instead of being der, die, das, etc.
+
+```{r}
+
+childes.Ger.article.df3 <-  mutate(childes.Ger.article.df3, article = case_when(article %in% c("der","die","das","den","dem") ~ "definite", article %in% c("ein","eine","einen","einem","einer") ~ "indefinite" ))
+
+```
+
+
+#### 1.6. Selecting only the required columns
+
+```{r}
+
+childes.Ger.article.df3 <- select(childes.Ger.article.df3, c(article,speaker))
+
+```
+
+'childes.Ger.article.df3' is the dataframe for research question 3 and it contains 6,08,304 rows and 2 columns such as article and speaker.
+
+## 2. MCA analysis for research question 3
+#### 2.1. Implementing MCA
+
+```{r}
+
+mca.3 <- MCA(childes.Ger.article.df3)
+mca.3
+
+```
+
+#### 2.2 Summary of MCA
+
+```{r}
+
+summary(mca.3)
+
+```
+In this summary, the first two dimensions together represent 100% of the total variance of data !
+
+In categories part, all the 4 categories i.e., 'definite', 'indefinite', and 'adults' and 'children' are having same cos2 value (0.528) in first dimension. So, they provide the same level of quality to the first dimension. Similarly, in second dimension, again all these categories are having same value (0.472).
+In the first dimension, 'indefinite' is having high contribution as their ctr value is high compared to others. In second dimension as well, 'indefinite' provides the high contribution.
+
+
+#### 2.3. Visualizing the graph of MCA
+
+```{r}
+
+plot(mca.3, invisible = "ind")
+
+```
+#### 2.4. Interpretation of MCA graph
+
+**Article:**
+
+In the above graph, indefinite is far separated from all the other categories. The categories 'definite' and 'indefinite' are separated from each other, such that they are having different profiles. 
+
+**Speaker:**
+The category 'children' is highly separated from all the other categories. Also, children and adults are separated from each other in the opposite quadrants. Hence, they are having different profiles.
+
+**Relation between speakers and articles:**
+
+In the above graph, there are not much association between any of the categories other than adults and definite. These two categories are somehow associated with each other. Hence, it is clear that adults are using more definite articles than indefinite. The separation of indefinite shows that it is not much used by both adults and children. 
+
+
+## 3. Answering research question 3
+
+What is the overall usage of articles among children, is it more or less (by comparing it with adults' usage) ?
+
+Generally, the usage of articles by children is always less than the usage of articles by adults. It is again proved by the above MCA. As per the graph, children is far separated from all the other categories and it depicts that they are using very less amount of both articles comparing to adults. When it comes to adults, they are using definite articles abundantly and using very less indefinite. For further confirmation, the below bar chart has been created. It shows that the adults usage is high for both definite and indefinite compared to children.
+
+
+
+
+```{r}
+
+ggplot(childes.Ger.article.df3, aes(x = speaker)) +
+       geom_bar(stat = "count") +
+   facet_wrap(~article) +
+  labs(x = "adults vs children", y = "overall usage of articles") +
+    theme(axis.text.x = element_text(angle = 90))
+
+
+```
+#### checking the count of definite and indefinite articles against speaker(adults and children)
+
+
+```{r}
+
+count <- childes.Ger.article.df3 %>% count(speaker, article)
+count
+
+```
+
+In childes corpus, adults have used articles 4,35,647 times,and children used it 1,72,657 times. In other words, adults have used 72% of articles and children have used 28% of articles in childes corpus. Therefore, it is clear that children are using very less amount of articles during their childhood !
+
+## for later use
+
+```{r}
+
+
+temp <- filter(childes.Ger.article.df, speaker_role=="Target_Child")
+
+temp <- arrange(temp, target_child_age_inyears)
+
+head(temp)
+
+#temp %>% count(stage, article)
+
+```
+
+
+
+
+```{r}
+
+childes.Ger.article.df1 %>% arrange(target_child_age_inyears)
+
+```
+
+
+
+```{r}
+
+childes.Ger.article.df1.einer <- filter(childes.Ger.article.df, article == "einer" & target_child_age_inyears >= 1.0 & target_child_age_inyears <= 2.0 & speaker_role=="Target_Child")
+
+head(childes.Ger.article.df1.einer)
+
+```
+
+```{r}
+
+childes.Ger.article.df1.einer %>% arrange(target_child_age_inyears)
+head(childes.Ger.article.df1.einer)
+
+```
+
+
+```{r}
+
+einer.uttr_Sören <- get_utterances(collection = "German", target_child = "Sören")
+
+```
+
+
+```{r}
+
+head(einer.uttr_Sören)
+
+```
+
+```{r}
+
+einer.uttr_Sören <- select(einer.uttr_Sören, c(id, gloss,speaker_role,target_child_name,target_child_age,corpus_name))
+
+head(einer.uttr_Sören)
+
+```
+
+
+```{r}
+
+einer.uttr_Sörentrial <- filter(einer.uttr_Sören, grepl("\\beiner\\b", gloss, ignore.case = TRUE))
+
+head(einer.uttr_Sörentrial)
+
+```
+
+
+```{r}
+
+einer.uttr_Sörentrial <- filter(einer.uttr_Sörentrial, target_child_age >= 12 & target_child_age <= 24)
+
+head(einer.uttr_Sörentrial)
+
+```
+
+
+
