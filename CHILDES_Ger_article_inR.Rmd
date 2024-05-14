@@ -1,0 +1,573 @@
+---
+title: "Analyzing German articles usage by children"
+author: "Sadhana"
+date: "2024-05-14"
+output: html_document
+---
+
+# Creating main dataframe for the task 
+### 1. Loading the necessary libraries. 
+
+
+```{r}
+
+library(childesr)
+library(tidyverse)
+library(ggplot2)
+library(ggrepel)
+
+```
+
+### 2. Listing the functions in 'childesr' package
+
+Since childes-db contains a set of tables, the 'childesr' package helps to retrieve and manipulate those tables with the help of below functions. For instance, get_collections() gives the names of available collections of corpora (“German”, “Spanish”, etc), and get_corpora() gives the names of available corpora.
+
+
+```{r}
+
+ls("package:childesr")
+
+```
+
+
+```{r}
+
+collection <- get_collections()
+head(collection)
+
+```
+
+
+```{r}
+
+corpora <- get_corpora()
+head(corpora)
+
+```
+
+### 3. Retrieving only the German data with the help of get_tokens() function
+
+get_tokens() gives information about the words we need
+
+```{r}
+
+childes.Ger.article <- get_tokens(collection = "German", token = c("der","die","das","den","dem","ein","eine","einen","einem","einer"))
+
+```
+```{r}
+
+head(childes.Ger.article)
+
+```
+
+
+### 4. Creating the main dataframe 
+#### 4.1. Selecting only the required columns
+
+```{r}
+
+childes.Ger.article.df <- select(childes.Ger.article, c(gloss,speaker_role,target_child_name,target_child_age,corpus_name))
+head(childes.Ger.article.df)
+
+```
+
+#### 4.2. Checking for NA values and removing those rows
+
+```{r}
+
+colSums(is.na(childes.Ger.article.df))
+
+```
+
+```{r}
+
+childes.Ger.article.df <- na.omit(childes.Ger.article.df)
+
+```
+
+
+#### 4.3. Checking the list of German corpora 
+
+```{r}
+
+childes.Ger.article.df %>% count(corpus_name)
+
+```
+
+#### 4.4. Getting the range of ages of children (ages are represented in terms of months)
+
+```{r}
+
+min(childes.Ger.article.df$target_child_age)
+max(childes.Ger.article.df$target_child_age)
+
+```
+
+#### 4.5. Selecting ages between 12 and 96 months (i.e., from 1 to 8 years)
+
+```{r}
+
+childes.Ger.article.df <- filter(childes.Ger.article.df, target_child_age >= 12 & target_child_age <= 96)
+head(childes.Ger.article.df)
+
+```
+
+#### 4.6. Renaming the column name of 'gloss' to 'article'
+
+```{r}
+
+childes.Ger.article.df <- rename(childes.Ger.article.df, article=gloss)
+
+
+```
+
+```{r}
+
+childes.Ger.article.df <- filter(childes.Ger.article.df, article %in% c("der","die","das","den","dem","ein","eine","einen","einem","einer"))
+
+```
+
+#### 4.7. Adding a new column called 'target_child_age_inyears' for representing ages in years
+
+
+```{r}
+
+childes.Ger.article.df <- mutate(childes.Ger.article.df, target_child_age = as.integer(target_child_age))
+
+```
+
+
+```{r}
+
+childes.Ger.article.df <- mutate(childes.Ger.article.df, target_child_age_inyears = target_child_age / 12)
+
+```
+
+```{r}
+
+childes.Ger.article.df <- mutate(childes.Ger.article.df, target_child_age_inyears = round(target_child_age_inyears, 1))
+head(childes.Ger.article.df)
+
+```
+
+#### 4.8. Classifying ages in terms of stage (stage1, stage2, etc.) and adding it in a new column.
+
+1 to 2 years belongs to stage1, 2 to 3 years belongs to stage2, 3 to 4 years belongs to stage3, 4 to 6 years belongs to stage4, and 6 to 8 years belongs to stage5
+
+```{r}
+
+childes.Ger.article.df %>% count(target_child_age_inyears)
+
+```
+
+
+```{r}
+
+childes.Ger.article.df <-  mutate(childes.Ger.article.df, stage = case_when(target_child_age_inyears >=1.0 &  target_child_age_inyears <=2.0 ~ "stage1", target_child_age_inyears >=2.1 &  target_child_age_inyears <=3.0 ~ "stage2", target_child_age_inyears >=3.1 &  target_child_age_inyears <=4.0 ~ "stage3", target_child_age_inyears >=4.1 &  target_child_age_inyears <=6.0 ~ "stage4", target_child_age_inyears >=6.1 &  target_child_age_inyears <=8.0 ~ "stage5"))
+            
+
+```
+
+```{r}
+
+head(childes.Ger.article.df)
+
+
+```
+```{r}
+
+summary(childes.Ger.article.df)
+
+```
+
+### 5. Saving the dataframe in excel format
+
+```{r}
+
+library(openxlsx)
+
+```
+
+```{r}
+
+write.xlsx(childes.Ger.article.df, 'main_dataset.xlsx',colNames=TRUE, rowNames=TRUE)
+
+```
+
+
+# Research question1
+
+At what age, children start to use articles in general? From when they start to use accusative and dative?
+
+### 1. Creating a subset dataframe for research question1
+
+#### 1.1. Copying the main dataframe
+
+```{r}
+
+childes.Ger.article.df1 <- childes.Ger.article.df
+
+```
+
+
+#### 1.2. Selecting only 'Target_Child' value in 'speaker_role' column, since this question is only related to children
+
+```{r}
+
+childes.Ger.article.df1 <- filter(childes.Ger.article.df1, speaker_role=="Target_Child")
+head(childes.Ger.article.df1)
+
+```
+
+
+#### 1.3. Selecting only the required columns 
+
+```{r}
+
+childes.Ger.article.df1 <- select(childes.Ger.article.df1, c(article,stage))
+
+head(childes.Ger.article.df1)
+
+```
+
+```{r}
+
+summary(childes.Ger.article.df1)
+
+```
+
+#### 1.4. Saving the dataframe in excel format
+
+
+```{r}
+
+write.xlsx(childes.Ger.article.df1, 'Rq1_dataset.xlsx',colNames=TRUE, rowNames=TRUE)
+
+```
+
+
+### 2. MCA analysis for research question1
+
+
+#### 2.1. Loading 'FactoMineR' package
+
+```{r}
+
+library(FactoMineR)
+
+```
+
+
+#### 2.3. Implementing MCA 
+
+```{r}
+
+mca.1 <- MCA(childes.Ger.article.df1, graph = FALSE)
+
+mca.1
+
+```
+
+
+#### 2.4.  Summary of MCA
+
+```{r}
+
+summary(mca.1)
+
+```
+
+
+
+#### 2.5. Visualizing the graph of MCA
+
+```{r}
+
+plot(mca.1, invisible = "ind")
+
+```
+
+The plots of the above graph are very congested and overlapped. Hence, it is very difficult to do the interpretation. In order to overcome this problem, there is a package called 'factoextra' that provides an elegant and clear visualization of MCA graph without any overlapping. 
+
+
+```{r}
+
+library(factoextra)
+
+```
+
+'fviz_mca_var()' function is used to display the MCA graph of variable categories.
+
+```{r}
+
+fviz_mca_var(mca.1)
+
+```
+
+
+# Research question2 
+
+Which articles' usage is high during childhood: Is it definite or indefinite?
+
+### 1. Creating a subset dataframe for research question 2
+
+#### 1.1. Copying the dataframe of research question 1
+
+```{r}
+
+childes.Ger.article.df2 <- childes.Ger.article.df1
+head(childes.Ger.article.df2)
+
+```
+
+#### 1.2. Creating a new column for definite and indefinite articles
+
+```{r}
+
+childes.Ger.article.df2 <-  mutate(childes.Ger.article.df2, def = case_when(article %in% c("der","die","das","den","dem") ~ "definite", article %in% c("ein","eine","einen","einem","einer") ~ "indefinite" ))
+
+```
+
+#### 1.3. Selecting only required columns 
+
+```{r}
+
+childes.Ger.article.df2 <- select(childes.Ger.article.df2, c(stage,def))
+
+head(childes.Ger.article.df2)
+
+```
+
+#### 1.4. Saving the dataframe
+
+```{r}
+
+write.xlsx(childes.Ger.article.df2, 'Rq2_dataset.xlsx',colNames=TRUE, rowNames=TRUE)
+
+```
+
+
+### 2. MCA analysis for research question 2
+
+#### 2.1. Implementing MCA
+
+```{r}
+
+mca.2 <- MCA(childes.Ger.article.df2, graph = FALSE)
+
+mca.2
+
+```
+
+#### 2.2. Summary of MCA
+
+```{r}
+
+summary(mca.2)
+
+```
+
+
+#### 2.3. Visualizing the graph of MCA
+
+
+```{r}
+
+plot(mca.2, invisible = "ind")
+
+```
+
+
+
+```{r}
+
+ggplot(childes.Ger.article.df2, aes(x = def)) +
+  geom_bar(stat = "count", aes(fill = def)) +
+  labs(x = "definte / indefinite", y = "Frequency of definite & indefinite articles")
+
+```
+
+# Research question3
+
+What is the overall usage of articles among children, is it more or less (by comparing it with adults' usage)?
+
+### 1. Creating a dataframe for research question3
+
+#### 1.1. Copying the main dataframe
+
+```{r}
+
+childes.Ger.article.df3 <- childes.Ger.article.df
+
+```
+
+#### 1.2. Getting the values of 'speaker_role' column
+
+```{r}
+
+unique(childes.Ger.article.df3$speaker_role)
+
+```
+
+#### 1.3. Removing the rows whose 'speaker_role' is not related to adults i.e., child, friend, playmate.
+
+```{r}
+
+childes.Ger.article.df3 <- filter(childes.Ger.article.df3, speaker_role != 'Child' & speaker_role != 'Friend' & speaker_role != 'Playmate')
+
+```
+
+#### 1.4. Adding new column called 'speaker'
+
+```{r}
+
+childes.Ger.article.df3 <-  mutate(childes.Ger.article.df3, speaker = case_when(speaker_role %in% c("Investigator","Mother"   ,"Grandfather", "Brother","Father","Relative","Grandmother","Visitor", "Adult", "Sister", "Teacher", "Sibling", "Unidentified", "Media" ) ~ "adults", speaker_role == "Target_Child" ~ "children"))
+
+```
+
+#### 1.5. Changing the values of 'article' column into definite and indefinite. 
+
+Inorder to make the analysis clear and simple, the articles has been categorized into definite and indefinite instead of being der, die, das, etc.
+
+```{r}
+
+childes.Ger.article.df3 <-  mutate(childes.Ger.article.df3, article = case_when(article %in% c("der","die","das","den","dem") ~ "definite", article %in% c("ein","eine","einen","einem","einer") ~ "indefinite" ))
+
+```
+
+
+#### 1.6. Selecting only the required columns
+
+```{r}
+
+childes.Ger.article.df3 <- select(childes.Ger.article.df3, c(article,speaker))
+head(childes.Ger.article.df3)
+
+```
+
+#### 1.7. Saving the dataframe
+
+```{r}
+
+write.xlsx(childes.Ger.article.df3, 'Rq3_dataset.xlsx',colNames=TRUE, rowNames=TRUE)
+
+```
+
+
+### 2. MCA analysis for research question3
+
+#### 2.1. Implementing MCA
+
+```{r}
+
+mca.3 <- MCA(childes.Ger.article.df3, graph = FALSE)
+mca.3
+
+```
+
+#### 2.2 Summary of MCA
+
+```{r}
+
+summary(mca.3)
+
+```
+
+
+#### 2.3. Visualizing the graph of MCA
+
+```{r}
+
+plot(mca.3, invisible = "ind")
+
+```
+
+
+
+```{r}
+
+ggplot(childes.Ger.article.df3, aes(x = speaker)) +
+       geom_bar(stat = "count") +
+   facet_wrap(~article) +
+  labs(x = "adults vs children", y = "overall usage of articles") +
+    theme(axis.text.x = element_text(angle = 90))
+
+
+```
+
+#### checking the count of definite and indefinite articles against speaker(adults and children)
+
+
+```{r}
+
+count <- childes.Ger.article.df3 %>% count(speaker, article)
+count
+
+```
+
+
+## Additional commands
+
+### Retrieving transcripts of 'den' for stage3
+
+
+```{r}
+
+den.utterence_stage3 <- get_utterances(collection = "German", age = c(36, 48))
+
+```
+
+```{r}
+
+den.utterence_stage3 <- select(den.utterence_stage3, c(id, gloss,speaker_role,target_child_name,target_child_age,corpus_name))
+
+```
+
+```{r}
+
+den.utterence_stage3 <- filter(den.utterence_stage3, grepl("\\bden\\b", gloss, ignore.case = TRUE))
+
+```
+
+
+```{r}
+
+den.utterence_stage3 <- filter(den.utterence_stage3, corpus_name == "Miller" )
+
+write.xlsx(den.utterence_stage3, 'den_uttr_stage3.xlsx',colNames=TRUE, rowNames=TRUE)
+
+```
+
+
+### Retrieving transcripts of 'dem' for stage3
+
+
+```{r}
+
+dem.utterence_stage3 <- get_utterances(collection = "German", age = c(36, 48))
+
+```
+
+```{r}
+
+dem.utterence_stage3 <- select(dem.utterence_stage3, c(id, gloss,speaker_role,target_child_name,target_child_age,corpus_name))
+
+```
+
+```{r}
+
+dem.utterence_stage3 <- filter(dem.utterence_stage3, grepl("\\bdem\\b", gloss, ignore.case = TRUE))
+
+```
+
+```{r}
+
+dem.utterence_stage3 <- filter(dem.utterence_stage3, corpus_name == "Miller" )
+
+write.xlsx(dem.utterence_stage3, 'dem_uttr_stage3.xlsx',colNames=TRUE, rowNames=TRUE)
+
+```
+
+
+
+
